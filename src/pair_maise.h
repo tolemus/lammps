@@ -13,12 +13,12 @@
 
 #ifdef PAIR_CLASS
 
-PairStyle(eim,PairMaise)
+PairStyle(maise,PairMaise)
 
 #else
 
-#ifndef LMP_PAIR_EIM_H
-#define LMP_PAIR_EIM_H
+#ifndef LMP_PAIR_MAISE_H
+#define LMP_PAIR_MAISE_H
 
 #include "pair.h"
 
