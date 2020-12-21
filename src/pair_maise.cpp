@@ -15,9 +15,7 @@
    Contributing author: Xiaowang Zhou (SNL)
 ------------------------------------------------------------------------- */
 
-#include "cmod.h"
-
-#include "pair_eim.h"
+#include "pair_maise.h"
 
 #include "atom.h"
 #include "comm.h"
@@ -35,7 +33,7 @@ using namespace LAMMPS_NS;
 
 /* ---------------------------------------------------------------------- */
 
-PairEIM::PairEIM(LAMMPS *lmp) : Pair(lmp)
+PairMaise::PairMaise(LAMMPS *lmp) : Pair(lmp)
 {
   single_enable = 0;
   restartinfo = 0;
@@ -83,10 +81,10 @@ PairMaise::~PairMaise()
 
 void PairMaise::compute(int eflag, int vflag)
 {
-  COMPUTE_MAISE(NULL, NULL, NULL, NULL, NULL, 
-		 NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 
-                  NULL, NULL)
-
+  // COMPUTE_MAISE(NULL, NULL, NULL, NULL, NULL, 
+	// 	 NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 
+  //                 NULL, NULL)
+  printf("COMPUTE\t\t\t\t\t\tAAAAAAAA");
   if (vflag_fdotr) virial_fdotr_compute();
 }
 
@@ -94,7 +92,7 @@ void PairMaise::compute(int eflag, int vflag)
    allocate all arrays
 ------------------------------------------------------------------------- */
 
-void PairEIM::allocate()
+void PairMaise::allocate()
 {
   allocated = 1;
   int n = atom->ntypes;
@@ -118,7 +116,7 @@ void PairEIM::allocate()
    global settings
 ------------------------------------------------------------------------- */
 
-void PairEIM::settings(int narg, char **/*arg*/)
+void PairMaise::settings(int narg, char **/*arg*/)
 {
   if (narg > 0) error->all(FLERR,"Illegal pair_style command");
 }
@@ -127,7 +125,7 @@ void PairEIM::settings(int narg, char **/*arg*/)
    set coeffs from set file
 ------------------------------------------------------------------------- */
 
-void PairEIM::coeff(int narg, char **arg)
+void PairMaise::coeff(int narg, char **arg)
 {
   int i,j,m,n;
 
@@ -202,7 +200,7 @@ void PairEIM::coeff(int narg, char **arg)
    init specific to this pair style
 ------------------------------------------------------------------------- */
 
-void PairEIM::init_style()
+void PairMaise::init_style()
 {
   // convert read-in file(s) to arrays and spline them
 
@@ -216,7 +214,7 @@ void PairEIM::init_style()
    init for one type pair i,j and corresponding j,i
 ------------------------------------------------------------------------- */
 
-double PairEIM::init_one(int i, int j)
+double PairMaise::init_one(int i, int j)
 {
   cutmax = sqrt(cutforcesq[i][j]);
   return cutmax;
@@ -226,7 +224,7 @@ double PairEIM::init_one(int i, int j)
    read potential values from a set file
 ------------------------------------------------------------------------- */
 
-void PairEIM::read_file(char *filename)
+void PairMaise::read_file(char *filename)
 {
   int npair = nelements*(nelements+1)/2;
   setfl->ielement = new int[nelements];
@@ -374,7 +372,7 @@ void PairEIM::read_file(char *filename)
    deallocate data associated with setfl file
 ------------------------------------------------------------------------- */
 
-void PairEIM::deallocate_setfl()
+void PairMaise::deallocate_setfl()
 {
   if (!setfl) return;
   delete [] setfl->ielement;
@@ -410,7 +408,7 @@ void PairEIM::deallocate_setfl()
    interpolate all file values to a single grid and cutoff
 ------------------------------------------------------------------------- */
 
-void PairEIM::file2array()
+void PairMaise::file2array()
 {
   int i,j,m,n;
   int irow,icol;
@@ -586,7 +584,7 @@ void PairEIM::file2array()
 
 /* ---------------------------------------------------------------------- */
 
-void PairEIM::array2spline()
+void PairMaise::array2spline()
 {
   rdr = 1.0/dr;
 
@@ -610,7 +608,7 @@ void PairEIM::array2spline()
 
 /* ---------------------------------------------------------------------- */
 
-void PairEIM::interpolate(int n, double delta, double *f,
+void PairMaise::interpolate(int n, double delta, double *f,
                           double **spline, double /*origin*/)
 {
   for (int m = 1; m <= n; m++) spline[m][6] = f[m];
@@ -645,7 +643,7 @@ void PairEIM::interpolate(int n, double delta, double *f,
    cutoff function
 ------------------------------------------------------------------------- */
 
-double PairEIM::funccutoff(double rp, double rc, double r)
+double PairMaise::funccutoff(double rp, double rc, double r)
 {
   double rbig = setfl->rbig;
   double rsmall = setfl->rsmall;
@@ -661,7 +659,7 @@ double PairEIM::funccutoff(double rp, double rc, double r)
    pair interaction function phi
 ------------------------------------------------------------------------- */
 
-double PairEIM::funcphi(int i, int j, double r)
+double PairMaise::funcphi(int i, int j, double r)
 {
   int ij;
   double value = 0.0;
@@ -703,7 +701,7 @@ double PairEIM::funcphi(int i, int j, double r)
    ion propensity function sigma
 ------------------------------------------------------------------------- */
 
-double PairEIM::funcsigma(int i, int j, double r)
+double PairMaise::funcsigma(int i, int j, double r)
 {
   int ij;
   double value = 0.0;
@@ -722,7 +720,7 @@ double PairEIM::funcsigma(int i, int j, double r)
    charge-charge interaction function sigma
 ------------------------------------------------------------------------- */
 
-double PairEIM::funccoul(int i, int j, double r)
+double PairMaise::funccoul(int i, int j, double r)
 {
   int ij;
   double value = 0.0;
@@ -739,7 +737,7 @@ double PairEIM::funccoul(int i, int j, double r)
 
 /* ---------------------------------------------------------------------- */
 
-int PairEIM::pack_forward_comm(int n, int *list, double *buf,
+int PairMaise::pack_forward_comm(int n, int *list, double *buf,
                                int /*pbc_flag*/, int * /*pbc*/)
 {
   int i,j,m;
@@ -762,7 +760,7 @@ int PairEIM::pack_forward_comm(int n, int *list, double *buf,
 
 /* ---------------------------------------------------------------------- */
 
-void PairEIM::unpack_forward_comm(int n, int first, double *buf)
+void PairMaise::unpack_forward_comm(int n, int first, double *buf)
 {
   int i,m,last;
 
@@ -778,7 +776,7 @@ void PairEIM::unpack_forward_comm(int n, int first, double *buf)
 
 /* ---------------------------------------------------------------------- */
 
-int PairEIM::pack_reverse_comm(int n, int first, double *buf)
+int PairMaise::pack_reverse_comm(int n, int first, double *buf)
 {
   int i,m,last;
 
@@ -795,7 +793,7 @@ int PairEIM::pack_reverse_comm(int n, int first, double *buf)
 
 /* ---------------------------------------------------------------------- */
 
-void PairEIM::unpack_reverse_comm(int n, int *list, double *buf)
+void PairMaise::unpack_reverse_comm(int n, int *list, double *buf)
 {
   int i,j,m;
 
@@ -818,7 +816,7 @@ void PairEIM::unpack_reverse_comm(int n, int *list, double *buf)
    memory usage of local atom-based arrays
 ------------------------------------------------------------------------- */
 
-double PairEIM::memory_usage()
+double PairMaise::memory_usage()
 {
   double bytes = maxeatom * sizeof(double);
   bytes += maxvatom*6 * sizeof(double);
@@ -997,13 +995,13 @@ void EIMPotentialFileReader::parse(FILE * fp)
   }
 }
 
-void EIMPotentialFileReader::get_global(PairEIM::Setfl *setfl) {
+void EIMPotentialFileReader::get_global(PairMaise::Setfl *setfl) {
   setfl->division  = division;
   setfl->rbig      = rbig;
   setfl->rsmall    = rsmall;
 }
 
-void EIMPotentialFileReader::get_element(PairEIM::Setfl *setfl, int i,
+void EIMPotentialFileReader::get_element(PairMaise::Setfl *setfl, int i,
                                          const std::string &name) {
   if (elements.find(name) == elements.end())
     error->one(FLERR,"Element " + name + " not defined in EIM potential file");
@@ -1018,7 +1016,7 @@ void EIMPotentialFileReader::get_element(PairEIM::Setfl *setfl, int i,
   setfl->q0[i] = data.q0;
 }
 
-void EIMPotentialFileReader::get_pair(PairEIM::Setfl *setfl, int ij,
+void EIMPotentialFileReader::get_pair(PairMaise::Setfl *setfl, int ij,
                                       const std::string &elemA,
                                       const std::string &elemB) {
   auto p = get_pair(elemA, elemB);
