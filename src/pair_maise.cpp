@@ -15,6 +15,7 @@
    Contributing author: Xiaowang Zhou (SNL)
 ------------------------------------------------------------------------- */
 
+#include "cmod.h"
 #include "pair_maise.h"
 
 #include "atom.h"
@@ -81,9 +82,9 @@ PairMaise::~PairMaise()
 
 void PairMaise::compute(int eflag, int vflag)
 {
-  // COMPUTE_MAISE(NULL, NULL, NULL, NULL, NULL, 
-	// 	 NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 
-  //                 NULL, NULL)
+  CALL_MAISE(NULL, NULL, NULL, NULL, NULL, 
+		 NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 
+                  NULL, NULL);
   printf("COMPUTE\t\t\t\t\t\tAAAAAAAA");
   if (vflag_fdotr) virial_fdotr_compute();
 }

@@ -7,11 +7,11 @@ SHELL = /bin/sh
 # specify flags and libraries needed for your compiler
 
 CC =		mpicxx
-CCFLAGS =	-g -O3
+CCFLAGS =	-g -O3 -I../MAISE/inc -I../MAISE/lib/include
 SHFLAGS =	-fPIC
 DEPFLAGS =	-M
 
-LINK =		mpicxx
+LINK =		mpicxx -L../MAISE/lib -lmaise
 LINKFLAGS =	-g -O3
 LIB = 
 SIZE =		size
