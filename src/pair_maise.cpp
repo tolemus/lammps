@@ -82,10 +82,10 @@ PairMaise::~PairMaise()
 
 void PairMaise::compute(int eflag, int vflag)
 {
+  printf("COMPUTE\n");
   CALL_MAISE(NULL, NULL, NULL, NULL, NULL, 
 		 NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 
                   NULL, NULL);
-  printf("COMPUTE\t\t\t\t\t\tAAAAAAAA");
   if (vflag_fdotr) virial_fdotr_compute();
 }
 
