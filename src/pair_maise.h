@@ -13,7 +13,7 @@
 
 #ifdef PAIR_CLASS
 
-PairStyle(eim,PairEIM)
+PairStyle(eim,PairMaise)
 
 #else
 
@@ -109,9 +109,9 @@ public:
   EIMPotentialFileReader(class LAMMPS* lmp, const std::string &filename,
                          const int auto_convert=0);
 
-  void get_global(PairEIM::Setfl *setfl);
-  void get_element(PairEIM::Setfl *setfl, int i, const std::string &name);
-  void get_pair(PairEIM::Setfl *setfl, int ij,
+  void get_global(PairMaise::Setfl *setfl);
+  void get_element(PairMaise::Setfl *setfl, int i, const std::string &name);
+  void get_pair(PairMaise::Setfl *setfl, int ij,
                 const std::string &elemA, const std::string &elemB);
 
 private:
