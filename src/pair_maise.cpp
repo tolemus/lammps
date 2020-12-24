@@ -15,7 +15,9 @@
    Contributing author: Xiaowang Zhou (SNL)
 ------------------------------------------------------------------------- */
 
-#include "cmod.h"
+extern "C" {
+  #include "cmod.h"
+}
 #include "pair_maise.h"
 
 #include "atom.h"
