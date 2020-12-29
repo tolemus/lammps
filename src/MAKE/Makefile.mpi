@@ -11,9 +11,9 @@ CCFLAGS =	-g -O3 -I../MAISE/inc -I../MAISE/lib/include
 SHFLAGS =	-fPIC
 DEPFLAGS =	-M
 
-LINK =		mpicxx -L../MAISE/lib 
+LINK =		mpicxx
 LINKFLAGS =	-g -O3
-LIB = -lmaise -lgomp
+LIB = -lmaise -lgomp -L../MAISE/lib 
 SIZE =		size
 
 ARCHIVE =	ar
