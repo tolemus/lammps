@@ -12,83 +12,187 @@
 ------------------------------------------------------------------------- */
 
 /* ----------------------------------------------------------------------
-   Contributing author: Xiaowang Zhou (SNL)
+   Contributing author: Carsten Svaneborg (SDU)
 ------------------------------------------------------------------------- */
 
+/* 8
+   01-09-21
+   coeff does not set masses
+   exterminate coeff :(
+   unexterminate coeff and debug :|
+   remove PairZero::coeff text
+   now using cout to print
+   added <iostream>
+   manually setting masses because I do not fear a deity
+   FINISH 8, MASSES ASSIGNED, ATOMS JUMPING OUT OF BOX
+   9
+   01-09-21
+   set cutoff manually
+   FUNCTIONS
+   10
+   01-09-21
+   try to implement box2lattice
+*/
+
 extern "C" {
-  #include "cmod.h"
+  #include "mlib.h"
 }
 #include "pair_maise.h"
 
 #include "atom.h"
 #include "comm.h"
-#include "error.h"
-#include "force.h"
 #include "memory.h"
-#include "neigh_list.h"
+#include "error.h"
 #include "neighbor.h"
-#include "tokenizer.h"
+#include "neigh_list.h"
+#include "neigh_request.h"
+#include "lattice.h"
+#include "domain.h"
+#include "compute.h"
+#include "compute_ke.h"
+#include "modify.h"
 
-#include <cmath>
 #include <cstring>
+#include <iostream>
 
 using namespace LAMMPS_NS;
 
 /* ---------------------------------------------------------------------- */
 
-PairMaise::PairMaise(LAMMPS *lmp) : Pair(lmp)
-{
-  single_enable = 0;
-  restartinfo = 0;
-  one_coeff = 1;
-  manybody_flag = 1;
-  centroidstressflag = CENTROID_NOTAVAIL;
-  unit_convert_flag = utils::get_supported_conversions(utils::ENERGY);
+PairMaise::PairMaise(LAMMPS *lmp) : Pair(lmp) {
+  coeffflag=1;
+  writedata=1;
+  single_enable=1;
+  respa_enable=1;
+  scale = nullptr;
 
-  setfl = nullptr;
-  nmax = 0;
-  rho = nullptr;
-  fp = nullptr;
-  map = nullptr;
-
-  nelements = 0;
-  elements = nullptr;
-
-  negativity = nullptr;
-  q0 = nullptr;
-  cutforcesq = nullptr;
-  Fij = nullptr;
-  Gij = nullptr;
-  phiij = nullptr;
-
-  Fij_spline = nullptr;
-  Gij_spline = nullptr;
-  phiij_spline = nullptr;
-
-  // set comm size needed by this Pair
-
-  comm_forward = 1;
-  comm_reverse = 1;
+  j = 0;
+  
+  comm_forward = 38;
+  comm_reverse = 30;
 }
 
-/* ----------------------------------------------------------------------
-   check if allocated, since class can be destructed when incomplete
-------------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------- */
 
 PairMaise::~PairMaise()
 {
-  
+  if (allocated) {
+    memory->destroy(setflag);
+    memory->destroy(cutsq);
+    memory->destroy(cut);
+    memory->destroy(scale);
+  }
+  delete [] map;
 }
 
 /* ---------------------------------------------------------------------- */
 
 void PairMaise::compute(int eflag, int vflag)
 {
-  printf("COMPUTE\n");
-  CALL_MAISE(NULL, NULL, NULL, NULL, NULL, 
-		 NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 
-                  NULL, NULL);
+  int i;
+  int q;
+  
+  ev_init(eflag,vflag);
+
+  double **f = atom->f;
+  ANN mR;
+  PRS mP;
+  PRS mW[9];
+  LNK mL;
+  Cell mC;
+  int mCODE;
+  int mN;
+  int mNM;
+  int mND;
+  int mNP;
+  int mXT;
+  int mATMN[4];
+  double mLAT[3][3];
+  double mPOS[4][3];
+  double **x;
+  double **v;
+
+  double mH;
+  double mFRC[4][3];
+  double mSTR[6];
+  double mLATf[3*3];
+  double mPOSf[4*3];
+  double mFRCf[4*3];
+  mCODE = 0;
+  mN    = 4;
+  mNM   = 500;
+  mND   = 0;
+  mNP   = 4;
+  mXT   = 1;
+  mC.p  = 0;
+  x = atom->x;
+  v = atom->v;
+
+  double mx;
+  double my;
+  double mz;
+
+
+  for(i=0;i<3;i++){
+    if (i==0){
+      mx = domain->boxhi[0] - domain->boxlo[0];
+      my = 0;
+      mz = 0;
+    }
+    if (i==1){
+      mx = domain->xy;
+      my = domain->boxhi[1] - domain->boxlo[1];
+      mz = 0;
+    }
+    if (i==2){
+      mx = domain->xz;
+      my = domain->yz;
+      mz = domain->boxhi[2] - domain->boxlo[2];
+    }
+    /*domain->lattice->box2lattice(mx,my,mz);*/
+    mLAT[i][0] = mx;
+    mLAT[i][1] = my;
+    mLAT[i][2] = mz;
+  }  
+
+  double ke;
+  mPOS[ 1][ 0] = -2.0;
+  mPOS[ 3][ 1] = -2.0;
+
+  mATMN[0] = 0; mATMN[1] = 0; mATMN[2] = 0; mATMN[3] = 0;
+  mL.B = 0;
+  for(i=0;i<3;i++)
+    for(q=0;q<3;q++)
+      mLATf[3*i+q] = mLAT[i][q];
+  for(i=0;i<mN;i++)
+    for(q=0;q<3;q++){
+      if(x[i][q] >= 10)
+	mPOSf[3*i+q] = x[i][q] - 20;
+      else
+	mPOSf[3*i+q] = x[i][q]; 
+    }
+  mH = CALL_MAISE(&mR, &mP, mW, &mL, &mC, mCODE, mN, mNM, mND, mNP, mXT, mATMN, mLATf, mPOSf, mFRCf, mSTR);
+  for (int i = 0; i < mN; i++){
+    ke +=0.5* mass[0]*(v[i][0]*v[i][0] + v[i][1]*v[i][1] + v[i][2]*v[i][2]);
+  }
+  eng_coul = ke-mC.E;
   if (vflag_fdotr) virial_fdotr_compute();
+  for(i=0;i<mN;i++)
+    for(q=0;q<3;q++)
+      f[i][q] = mFRCf[3*i+q];
+  if(j<=2)
+  for(i=0;i<mN;i++)
+    for(q=0;q<3;q++)
+      printf("%d %d force: % lf % lf % lf\n",i,q,f[i][q],mPOSf[3*i+q],mC.E);
+  j++;
+
+}
+
+/* ---------------------------------------------------------------------- */
+
+void PairMaise::compute_outer(int eflag, int vflag)
+{
+ ev_init(eflag,vflag);
 }
 
 /* ----------------------------------------------------------------------
@@ -99,6 +203,7 @@ void PairMaise::allocate()
 {
   allocated = 1;
   int n = atom->ntypes;
+  map = new int[n+1];
 
   memory->create(setflag,n+1,n+1,"pair:setflag");
   for (int i = 1; i <= n; i++)
@@ -106,70 +211,70 @@ void PairMaise::allocate()
       setflag[i][j] = 0;
 
   memory->create(cutsq,n+1,n+1,"pair:cutsq");
-
-  map = new int[n+1];
-  for (int i = 1; i <= n; i++) map[i] = -1;
-
-  memory->create(type2Fij,n+1,n+1,"pair:type2Fij");
-  memory->create(type2Gij,n+1,n+1,"pair:type2Gij");
-  memory->create(type2phiij,n+1,n+1,"pair:type2phiij");
+  memory->create(cut,n+1,n+1,"pair:cut");
+  memory->create(scale,n+1,n+1,"pair:scale");
 }
 
 /* ----------------------------------------------------------------------
    global settings
 ------------------------------------------------------------------------- */
 
-void PairMaise::settings(int narg, char **/*arg*/)
+void PairMaise::settings(int narg, char **arg)
 {
-  if (narg > 0) error->all(FLERR,"Illegal pair_style command");
+  if ((narg != 1) && (narg != 2))
+    error->all(FLERR,"Illegal pair_style command");
+
+  cut_global = utils::numeric(FLERR,arg[0],false,lmp);
+  if (narg == 2) {
+    if (strcmp("nocoeff",arg[1]) == 0) coeffflag=0;
+    else error->all(FLERR,"Illegal pair_style command");
+  }
+
+  // reset cutoffs that have been explicitly set
+
+  if (allocated) {
+    int i,j;
+    for (i = 1; i <= atom->ntypes; i++)
+      for (j = i+1; j <= atom->ntypes; j++)
+        cut[i][j] = cut_global;
+  }
 }
 
 /* ----------------------------------------------------------------------
-   set coeffs from set file
+   set coeffs for one or more type pairs
 ------------------------------------------------------------------------- */
 
 void PairMaise::coeff(int narg, char **arg)
 {
-  int i,j,m,n;
-
-  if (!allocated) allocate();
-
-  if (narg < 5) error->all(FLERR,"Incorrect args for pair coefficients");
-
-  // insure I,J args are * *
-
-  if (strcmp(arg[0],"*") != 0 || strcmp(arg[1],"*") != 0)
+    int m,n;
+    if ((narg < 2) || (coeffflag && narg > 4))
     error->all(FLERR,"Incorrect args for pair coefficients");
 
-  // read EIM element names before filename
-  // nelements = # of EIM elements to read from file
-  // elements = list of unique element names
+  if (!allocated) allocate();
+  
+  if (strcmp(arg[0], "*") != 0 || strcmp(arg[1], "*") != 0)
+    error->all(FLERR, "Incorrect args for pair coefficients");
 
   if (nelements) {
-    for (i = 0; i < nelements; i++) delete [] elements[i];
+    for (int i=0; i < nelements; i++) delete [] elements[i];
     delete [] elements;
+    delete [] mass;
   }
-  nelements = narg - 3 - atom->ntypes;
-  if (nelements < 1) error->all(FLERR,"Incorrect args for pair coefficients");
-  elements = new char*[nelements];
 
-  for (i = 0; i < nelements; i++) {
+  nelements = 2;
+  
+  elements = new char*[nelements];
+  mass = new double[nelements];
+
+  for (int i = 0; i < nelements; i++) {
     n = strlen(arg[i+2]) + 1;
     elements[i] = new char[n];
-    strcpy(elements[i],arg[i+2]);
+    strcpy(elements[i], arg[i+2]);
   }
 
-  // read EIM file
-
-  deallocate_setfl();
-  setfl = new Setfl();
-  read_file(arg[2+nelements]);
-
-  // read args that map atom types to elements in potential file
-  // map[i] = which element the Ith atom type is, -1 if "NULL"
-
-  for (i = 3 + nelements; i < narg; i++) {
-    m = i - (3+nelements) + 1;
+  for (int i = 4 + nelements; i < narg; i++){
+    m = i - (4+nelements) + 1;
+    int j;
     for (j = 0; j < nelements; j++)
       if (strcmp(arg[i],elements[j]) == 0) break;
     if (j < nelements) map[m] = j;
@@ -177,870 +282,149 @@ void PairMaise::coeff(int narg, char **arg)
     else error->all(FLERR,"Incorrect args for pair coefficients");
   }
 
-  // clear setflag since coeff() called once with I,J = * *
-
   n = atom->ntypes;
-  for (i = 1; i <= n; i++)
-    for (j = i; j <= n; j++)
+  for (int i = 1; i <= n; i++)
+    for (int j = i; j <= n; j++)
       setflag[i][j] = 0;
 
-  // set setflag i,j for type pairs where both are mapped to elements
-  // set mass of atom type if i = j
+  mass[0] = 63.546;
+
+    for (int i = 0; i < nelements; i++)
+    if (mass[i] != 0)
+      std::cout << "MASS: " << i << " " << mass[i] << "\n" << std::endl;
 
   int count = 0;
-  for (i = 1; i <= n; i++)
-    for (j = i; j <= n; j++)
+   for (int i = 1; i <= n; i++) {
+    for (int j = i; j <= n; j++) {
       if (map[i] >= 0 && map[j] >= 0) {
         setflag[i][j] = 1;
-        if (i == j) atom->set_mass(FLERR,i,setfl->mass[map[i]]);
-        count++;
+        if (i == j){
+	  atom->set_mass(FLERR,i,mass[map[i]]);
+        }
+	  count++;
       }
+      scale[i][j] = 1.0;
+    }
 
-  if (count == 0) error->all(FLERR,"Incorrect args for pair coefficients");
+   }
+   int ilo,ihi,jlo,jhi;
+   utils::bounds(FLERR,arg[0],1,atom->ntypes,ilo,ihi,error);
+   utils::bounds(FLERR,arg[1],1,atom->ntypes,jlo,jhi,error);
+
+   double cut_one = cut_global;
+   if (coeffflag && (narg == 3)) cut_one = utils::numeric(FLERR,arg[2],false,lmp);
+   cut[0][0] = 20;
+   cut[0][1] = 20;
+   cut[1][1] = 20;
 }
-
-/* ----------------------------------------------------------------------
-   init specific to this pair style
-------------------------------------------------------------------------- */
-
-void PairMaise::init_style()
-{
-  // convert read-in file(s) to arrays and spline them
-
-  file2array();
-  array2spline();
-
-  neighbor->request(this,instance_me);
-}
-
 /* ----------------------------------------------------------------------
    init for one type pair i,j and corresponding j,i
 ------------------------------------------------------------------------- */
 
 double PairMaise::init_one(int i, int j)
 {
-  cutmax = sqrt(cutforcesq[i][j]);
-  return cutmax;
+  if (setflag[i][j] == 0) {
+    cut[i][j] = mix_distance(cut[i][i],cut[j][j]);
+  }
+
+  return cut[i][j];
 }
 
 /* ----------------------------------------------------------------------
-   read potential values from a set file
+   proc 0 writes to restart file
 ------------------------------------------------------------------------- */
 
-void PairMaise::read_file(char *filename)
+void PairMaise::write_restart(FILE *fp)
 {
-  int npair = nelements*(nelements+1)/2;
-  setfl->ielement = new int[nelements];
-  setfl->mass = new double[nelements];
-  setfl->negativity = new double[nelements];
-  setfl->ra = new double[nelements];
-  setfl->ri = new double[nelements];
-  setfl->Ec = new double[nelements];
-  setfl->q0 = new double[nelements];
-  setfl->rcutphiA = new double[npair];
-  setfl->rcutphiR = new double[npair];
-  setfl->Eb = new double[npair];
-  setfl->r0 = new double[npair];
-  setfl->alpha = new double[npair];
-  setfl->beta = new double[npair];
-  setfl->rcutq = new double[npair];
-  setfl->Asigma = new double[npair];
-  setfl->rq = new double[npair];
-  setfl->rcutsigma = new double[npair];
-  setfl->Ac = new double[npair];
-  setfl->zeta = new double[npair];
-  setfl->rs = new double[npair];
-  setfl->tp = new int[npair];
+  write_restart_settings(fp);
 
-  // read potential file
-  if( comm->me == 0) {
-    EIMPotentialFileReader reader(lmp, filename, unit_convert_flag);
-
-    reader.get_global(setfl);
-
-    for (int i = 0; i < nelements; i++) {
-      reader.get_element(setfl, i, elements[i]);
-    }
-
-    for (int i = 0; i < nelements; i++) {
-      for (int j = i; j < nelements; j++) {
-        int ij;
-        if (i == j) ij = i;
-        else if (i < j) ij = nelements*(i+1) - (i+1)*(i+2)/2 + j;
-        else ij = nelements*(j+1) - (j+1)*(j+2)/2 + i;
-        reader.get_pair(setfl, ij, elements[i], elements[j]);
+  int i,j;
+  for (i = 1; i <= atom->ntypes; i++)
+    for (j = i; j <= atom->ntypes; j++) {
+      fwrite(&setflag[i][j],sizeof(int),1,fp);
+      if (setflag[i][j]) {
+        fwrite(&cut[i][j],sizeof(double),1,fp);
       }
     }
-  }
+}
 
-  // broadcast potential information to other procs
-  MPI_Bcast(&setfl->division, 1, MPI_DOUBLE, 0, world);
-  MPI_Bcast(&setfl->rbig, 1, MPI_DOUBLE, 0, world);
-  MPI_Bcast(&setfl->rsmall, 1, MPI_DOUBLE, 0, world);
+/* ----------------------------------------------------------------------
+   proc 0 reads from restart file, bcasts
+------------------------------------------------------------------------- */
 
-  MPI_Bcast(setfl->ielement, nelements, MPI_INT, 0, world);
-  MPI_Bcast(setfl->mass, nelements, MPI_DOUBLE, 0, world);
-  MPI_Bcast(setfl->negativity, nelements, MPI_DOUBLE, 0, world);
-  MPI_Bcast(setfl->ra, nelements, MPI_DOUBLE, 0, world);
-  MPI_Bcast(setfl->ri, nelements, MPI_DOUBLE, 0, world);
-  MPI_Bcast(setfl->Ec, nelements, MPI_DOUBLE, 0, world);
-  MPI_Bcast(setfl->q0, nelements, MPI_DOUBLE, 0, world);
+void PairMaise::read_restart(FILE *fp)
+{
+  read_restart_settings(fp);
+  allocate();
 
-  MPI_Bcast(setfl->rcutphiA, npair, MPI_DOUBLE, 0, world);
-  MPI_Bcast(setfl->rcutphiR, npair, MPI_DOUBLE, 0, world);
-  MPI_Bcast(setfl->Eb, npair, MPI_DOUBLE, 0, world);
-  MPI_Bcast(setfl->r0, npair, MPI_DOUBLE, 0, world);
-  MPI_Bcast(setfl->alpha, npair, MPI_DOUBLE, 0, world);
-  MPI_Bcast(setfl->beta, npair, MPI_DOUBLE, 0, world);
-  MPI_Bcast(setfl->rcutq, npair, MPI_DOUBLE, 0, world);
-  MPI_Bcast(setfl->Asigma, npair, MPI_DOUBLE, 0, world);
-  MPI_Bcast(setfl->rq, npair, MPI_DOUBLE, 0, world);
-  MPI_Bcast(setfl->rcutsigma, npair, MPI_DOUBLE, 0, world);
-  MPI_Bcast(setfl->Ac, npair, MPI_DOUBLE, 0, world);
-  MPI_Bcast(setfl->zeta, npair, MPI_DOUBLE, 0, world);
-  MPI_Bcast(setfl->rs, npair, MPI_DOUBLE, 0, world);
-  MPI_Bcast(setfl->tp, npair, MPI_INT, 0, world);
-
-  setfl->nr = 5000;
-  setfl->cut = 0.0;
-  for (int i = 0; i < npair; i++) {
-    if (setfl->cut < setfl->rcutphiA[i]) setfl->cut = setfl->rcutphiA[i];
-    if (setfl->cut < setfl->rcutphiR[i]) setfl->cut = setfl->rcutphiR[i];
-    if (setfl->cut < setfl->rcutq[i]) setfl->cut = setfl->rcutq[i];
-    if (setfl->cut < setfl->rcutsigma[i]) setfl->cut = setfl->rcutsigma[i];
-  }
-  setfl->dr = setfl->cut/(setfl->nr-1.0);
-
-  memory->create(setfl->cuts,nelements,nelements,"pair:cuts");
-  for (int i = 0; i < nelements; i++) {
-    for (int j = 0; j < nelements; j++) {
-      if (i > j) {
-        setfl->cuts[i][j] = setfl->cuts[j][i];
-      } else {
-        int ij;
-        if (i == j) {
-          ij = i;
-        } else {
-          ij = nelements*(i+1) - (i+1)*(i+2)/2 + j;
+  int i,j;
+  int me = comm->me;
+  for (i = 1; i <= atom->ntypes; i++)
+    for (j = i; j <= atom->ntypes; j++) {
+      if (me == 0) utils::sfread(FLERR,&setflag[i][j],sizeof(int),1,fp,nullptr,error);
+      MPI_Bcast(&setflag[i][j],1,MPI_INT,0,world);
+      if (setflag[i][j]) {
+        if (me == 0) {
+          utils::sfread(FLERR,&cut[i][j],sizeof(double),1,fp,nullptr,error);
         }
-        setfl->cuts[i][j] = setfl->rcutphiA[ij];
-        if (setfl->cuts[i][j] < setfl->rcutphiR[ij])
-          setfl->cuts[i][j] = setfl->rcutphiR[ij];
-        if (setfl->cuts[i][j] < setfl->rcutq[ij])
-          setfl->cuts[i][j] = setfl->rcutq[ij];
-        if (setfl->cuts[i][j] < setfl->rcutsigma[ij])
-          setfl->cuts[i][j] = setfl->rcutsigma[ij];
-      }
-    }
-  }
-
-  memory->create(setfl->Fij,nelements,nelements,setfl->nr+1,"pair:Fij");
-  memory->create(setfl->Gij,nelements,nelements,setfl->nr+1,"pair:Gij");
-  memory->create(setfl->phiij,nelements,nelements,setfl->nr+1,"pair:phiij");
-
-  for (int i = 0; i < nelements; i++)
-    for (int j = 0; j < nelements; j++) {
-      for (int k = 0; k < setfl->nr; k++) {
-        if (i > j) {
-          setfl->phiij[i][j][k+1] = setfl->phiij[j][i][k+1];
-        } else {
-          double r = k*setfl->dr;
-          setfl->phiij[i][j][k+1] = funcphi(i,j,r);
-        }
-      }
-    }
-
-  for (int i = 0; i < nelements; i++)
-    for (int j = 0; j < nelements; j++) {
-      for (int k = 0; k < setfl->nr; k++) {
-        double r = k*setfl->dr;
-        setfl->Fij[i][j][k+1] = funcsigma(i,j,r);
-      }
-    }
-
-  for (int i = 0; i < nelements; i++)
-    for (int j = 0; j < nelements; j++) {
-      for (int k = 0; k < setfl->nr; k++) {
-        if (i > j) {
-          setfl->Gij[i][j][k+1] = setfl->Gij[j][i][k+1];
-        } else {
-          double r = k*setfl->dr;
-          setfl->Gij[i][j][k+1] = funccoul(i,j,r);
-        }
+        MPI_Bcast(&cut[i][j],1,MPI_DOUBLE,0,world);
       }
     }
 }
 
 /* ----------------------------------------------------------------------
-   deallocate data associated with setfl file
+   proc 0 writes to restart file
 ------------------------------------------------------------------------- */
 
-void PairMaise::deallocate_setfl()
+void PairMaise::write_restart_settings(FILE *fp)
 {
-  if (!setfl) return;
-  delete [] setfl->ielement;
-  delete [] setfl->mass;
-  delete [] setfl->negativity;
-  delete [] setfl->ra;
-  delete [] setfl->ri;
-  delete [] setfl->Ec;
-  delete [] setfl->q0;
-  delete [] setfl->rcutphiA;
-  delete [] setfl->rcutphiR;
-  delete [] setfl->Eb;
-  delete [] setfl->r0;
-  delete [] setfl->alpha;
-  delete [] setfl->beta;
-  delete [] setfl->rcutq;
-  delete [] setfl->Asigma;
-  delete [] setfl->rq;
-  delete [] setfl->rcutsigma;
-  delete [] setfl->Ac;
-  delete [] setfl->zeta;
-  delete [] setfl->rs;
-  delete [] setfl->tp;
-  memory->destroy(setfl->cuts);
-  memory->destroy(setfl->Fij);
-  memory->destroy(setfl->Gij);
-  memory->destroy(setfl->phiij);
-  delete setfl;
+  fwrite(&cut_global,sizeof(double),1,fp);
+  fwrite(&coeffflag,sizeof(int),1,fp);
 }
 
 /* ----------------------------------------------------------------------
-   convert read-in potentials to standard array format
-   interpolate all file values to a single grid and cutoff
+   proc 0 reads from restart file, bcasts
 ------------------------------------------------------------------------- */
 
-void PairMaise::file2array()
+void PairMaise::read_restart_settings(FILE *fp)
 {
-  int i,j,m,n;
-  int irow,icol;
-  int ntypes = atom->ntypes;
-
-  delete [] negativity;
-  delete [] q0;
-  memory->destroy(cutforcesq);
-  negativity = new double[ntypes+1];
-  q0 = new double[ntypes+1];
-  memory->create(cutforcesq,ntypes+1,ntypes+1,"pair:cutforcesq");
-  for (i = 1; i <= ntypes; i++) {
-    if (map[i] == -1) {
-      negativity[i]=0.0;
-      q0[i]=0.0;
-    } else {
-      negativity[i]=setfl->negativity[map[i]];
-      q0[i]=setfl->q0[map[i]];
-    }
+  int me = comm->me;
+  if (me == 0) {
+    utils::sfread(FLERR,&cut_global,sizeof(double),1,fp,nullptr,error);
+    utils::sfread(FLERR,&coeffflag,sizeof(int),1,fp,nullptr,error);
   }
+  MPI_Bcast(&cut_global,1,MPI_DOUBLE,0,world);
+  MPI_Bcast(&coeffflag,1,MPI_INT,0,world);
+}
 
-  for (i = 1; i <= ntypes; i++)
-    for (j = 1; j <= ntypes; j++) {
-      if (map[i] == -1 || map[j] == -1) {
-        cutforcesq[i][j] = setfl->cut;
-        cutforcesq[i][j] =  cutforcesq[i][j]*cutforcesq[i][j];
-      } else {
-        cutforcesq[i][j] = setfl->cuts[map[i]][map[j]];
-        cutforcesq[i][j] =  cutforcesq[i][j]*cutforcesq[i][j];
-      }
-    }
+/* ----------------------------------------------------------------------
+   proc 0 writes to data file
+------------------------------------------------------------------------- */
 
-  nr = setfl->nr;
-  dr = setfl->dr;
+void PairMaise::write_data(FILE *fp)
+{
+  for (int i = 1; i <= atom->ntypes; i++)
+    fprintf(fp,"%d\n",i);
+}
 
-  // ------------------------------------------------------------------
-  // setup Fij arrays
-  // ------------------------------------------------------------------
+/* ----------------------------------------------------------------------
+   proc 0 writes all pairs to data file
+------------------------------------------------------------------------- */
 
-  nFij = nelements*nelements + 1;
-  memory->destroy(Fij);
-  memory->create(Fij,nFij,nr+1,"pair:Fij");
-
-  // copy each element's Fij to global Fij
-
-  n=0;
-  for (i = 0; i < nelements; i++)
-    for (j = 0; j < nelements; j++) {
-      for (m = 1; m <= nr; m++) Fij[n][m] = setfl->Fij[i][j][m];
-      n++;
-    }
-
-  // add extra Fij of zeroes for non-EIM types to point to (pair hybrid)
-
-  for (m = 1; m <= nr; m++) Fij[nFij-1][m] = 0.0;
-
-  // type2Fij[i][j] = which Fij array (0 to nFij-1) each type pair maps to
-  // setfl of Fij arrays
-  // value = n = sum over rows of matrix until reach irow,icol
-  // if atom type doesn't point to element (non-EIM atom in pair hybrid)
-  // then map it to last Fij array of zeroes
-
-  for (i = 1; i <= ntypes; i++) {
-    for (j = 1; j <= ntypes; j++) {
-      irow = map[i];
-      icol = map[j];
-      if (irow == -1 || icol == -1) {
-        type2Fij[i][j] = nFij-1;
-      } else {
-        n = 0;
-        for (m = 0; m < irow; m++) n += nelements;
-        n += icol;
-        type2Fij[i][j] = n;
-      }
-    }
-  }
-
-  // ------------------------------------------------------------------
-  // setup Gij arrays
-  // ------------------------------------------------------------------
-
-  nGij = nelements * (nelements+1) / 2 + 1;
-  memory->destroy(Gij);
-  memory->create(Gij,nGij,nr+1,"pair:Gij");
-
-  // copy each element's Gij to global Gij, only for I >= J
-
-  n=0;
-  for (i = 0; i < nelements; i++)
-    for (j = 0; j <= i; j++) {
-      for (m = 1; m <= nr; m++) Gij[n][m] = setfl->Gij[i][j][m];
-      n++;
-    }
-
-  // add extra Gij of zeroes for non-EIM types to point to (pair hybrid)
-
-  for (m = 1; m <= nr; m++) Gij[nGij-1][m] = 0.0;
-
-  // type2Gij[i][j] = which Gij array (0 to nGij-1) each type pair maps to
-  // setfl of Gij arrays only fill lower triangular Nelement matrix
-  // value = n = sum over rows of lower-triangular matrix until reach irow,icol
-  // swap indices when irow < icol to stay lower triangular
-  // if atom type doesn't point to element (non-EIM atom in pair hybrid)
-  // then map it to last Gij array of zeroes
-
-  for (i = 1; i <= ntypes; i++) {
-    for (j = 1; j <= ntypes; j++) {
-      irow = map[i];
-      icol = map[j];
-      if (irow == -1 || icol == -1) {
-        type2Gij[i][j] = nGij-1;
-      } else {
-        if (irow < icol) {
-          irow = map[j];
-          icol = map[i];
-        }
-        n = 0;
-        for (m = 0; m < irow; m++) n += m + 1;
-        n += icol;
-        type2Gij[i][j] = n;
-      }
-    }
-  }
-
-  // ------------------------------------------------------------------
-  // setup phiij arrays
-  // ------------------------------------------------------------------
-
-  nphiij = nelements * (nelements+1) / 2 + 1;
-  memory->destroy(phiij);
-  memory->create(phiij,nphiij,nr+1,"pair:phiij");
-
-  // copy each element pair phiij to global phiij, only for I >= J
-
-  n = 0;
-  for (i = 0; i < nelements; i++)
-    for (j = 0; j <= i; j++) {
-      for (m = 1; m <= nr; m++) phiij[n][m] = setfl->phiij[i][j][m];
-      n++;
-    }
-
-  // add extra phiij of zeroes for non-EIM types to point to (pair hybrid)
-
-  for (m = 1; m <= nr; m++) phiij[nphiij-1][m] = 0.0;
-
-  // type2phiij[i][j] = which phiij array (0 to nphiij-1)
-  //                    each type pair maps to
-  // setfl of phiij arrays only fill lower triangular Nelement matrix
-  // value = n = sum over rows of lower-triangular matrix until reach irow,icol
-  // swap indices when irow < icol to stay lower triangular
-  // if atom type doesn't point to element (non-EIM atom in pair hybrid)
-  // then map it to last phiij array of zeroes
-
-  for (i = 1; i <= ntypes; i++) {
-    for (j = 1; j <= ntypes; j++) {
-      irow = map[i];
-      icol = map[j];
-      if (irow == -1 || icol == -1) {
-        type2phiij[i][j] = nphiij-1;
-      } else {
-        if (irow < icol) {
-          irow = map[j];
-          icol = map[i];
-        }
-        n = 0;
-        for (m = 0; m < irow; m++) n += m + 1;
-        n += icol;
-        type2phiij[i][j] = n;
-      }
-    }
-  }
+void PairMaise::write_data_all(FILE *fp)
+{
+  for (int i = 1; i <= atom->ntypes; i++)
+    for (int j = i; j <= atom->ntypes; j++)
+      fprintf(fp,"%d %d %g\n",i,j,cut[i][j]);
 }
 
 /* ---------------------------------------------------------------------- */
 
-void PairMaise::array2spline()
+double PairMaise::single(int /*i*/, int /*j*/, int /* itype */, int /* jtype */,
+                        double /* rsq */, double /*factor_coul*/,
+                        double /* factor_lj */, double &fforce)
 {
-  rdr = 1.0/dr;
-
-  memory->destroy(Fij_spline);
-  memory->destroy(Gij_spline);
-  memory->destroy(phiij_spline);
-
-  memory->create(Fij_spline,nFij,nr+1,7,"pair:Fij");
-  memory->create(Gij_spline,nGij,nr+1,7,"pair:Gij");
-  memory->create(phiij_spline,nphiij,nr+1,7,"pair:phiij");
-
-  for (int i = 0; i < nFij; i++)
-    interpolate(nr,dr,Fij[i],Fij_spline[i],0.0);
-
-  for (int i = 0; i < nGij; i++)
-    interpolate(nr,dr,Gij[i],Gij_spline[i],0.0);
-
-  for (int i = 0; i < nphiij; i++)
-    interpolate(nr,dr,phiij[i],phiij_spline[i],0.0);
+  fforce = 0.0;
+  return 0.0;
 }
 
-/* ---------------------------------------------------------------------- */
-
-void PairMaise::interpolate(int n, double delta, double *f,
-                          double **spline, double /*origin*/)
-{
-  for (int m = 1; m <= n; m++) spline[m][6] = f[m];
-
-  spline[1][5] = spline[2][6] - spline[1][6];
-  spline[2][5] = 0.5 * (spline[3][6]-spline[1][6]);
-  spline[n-1][5] = 0.5 * (spline[n][6]-spline[n-2][6]);
-  spline[n][5] = 0.0;
-
-  for (int m = 3; m <= n-2; m++)
-    spline[m][5] = ((spline[m-2][6]-spline[m+2][6]) +
-                    8.0*(spline[m+1][6]-spline[m-1][6])) / 12.0;
-
-  for (int m = 1; m <= n-1; m++) {
-    spline[m][4] = 3.0*(spline[m+1][6]-spline[m][6]) -
-      2.0*spline[m][5] - spline[m+1][5];
-    spline[m][3] = spline[m][5] + spline[m+1][5] -
-      2.0*(spline[m+1][6]-spline[m][6]);
-  }
-
-  spline[n][4] = 0.0;
-  spline[n][3] = 0.0;
-
-  for (int m = 1; m <= n; m++) {
-    spline[m][2] = spline[m][5]/delta;
-    spline[m][1] = 2.0*spline[m][4]/delta;
-    spline[m][0] = 3.0*spline[m][3]/delta;
-  }
-}
-
-/* ----------------------------------------------------------------------
-   cutoff function
-------------------------------------------------------------------------- */
-
-double PairMaise::funccutoff(double rp, double rc, double r)
-{
-  double rbig = setfl->rbig;
-  double rsmall = setfl->rsmall;
-
-  double a = (rsmall-rbig)/(rc-rp)*(r-rp)+rbig;
-  a = erfc(a);
-  double b = erfc(rbig);
-  double c = erfc(rsmall);
-  return (a-c)/(b-c);
-}
-
-/* ----------------------------------------------------------------------
-   pair interaction function phi
-------------------------------------------------------------------------- */
-
-double PairMaise::funcphi(int i, int j, double r)
-{
-  int ij;
-  double value = 0.0;
-  if (i == j) ij = i;
-  else if (i < j) ij = nelements*(i+1) - (i+1)*(i+2)/2 + j;
-  else ij = nelements*(j+1) - (j+1)*(j+2)/2 + i;
-  if (r < 0.2) r = 0.2;
-  if (setfl->tp[ij] == 1) {
-    double a = setfl->Eb[ij]*setfl->alpha[ij] /
-      (setfl->beta[ij]-setfl->alpha[ij]);
-    double b = setfl->Eb[ij]*setfl->beta[ij] /
-      (setfl->beta[ij]-setfl->alpha[ij]);
-    if (r < setfl->rcutphiA[ij]) {
-      value -= a*exp(-setfl->beta[ij]*(r/setfl->r0[ij]-1.0))*
-        funccutoff(setfl->r0[ij],setfl->rcutphiA[ij],r);
-    }
-    if (r < setfl-> rcutphiR[ij]) {
-      value += b*exp(-setfl->alpha[ij]*(r/setfl->r0[ij]-1.0))*
-        funccutoff(setfl->r0[ij],setfl->rcutphiR[ij],r);
-    }
-  } else if (setfl->tp[ij] == 2) {
-    double a=setfl->Eb[ij]*setfl->alpha[ij]*pow(setfl->r0[ij],setfl->beta[ij])/
-      (setfl->beta[ij]-setfl->alpha[ij]);
-    double b=a*setfl->beta[ij]/setfl->alpha[ij]*
-      pow(setfl->r0[ij],setfl->alpha[ij]-setfl->beta[ij]);
-    if (r < setfl->rcutphiA[ij]) {
-      value -= a/pow(r,setfl->beta[ij])*
-        funccutoff(setfl->r0[ij],setfl->rcutphiA[ij],r);
-    }
-    if (r < setfl-> rcutphiR[ij]) {
-      value += b/pow(r,setfl->alpha[ij])*
-        funccutoff(setfl->r0[ij],setfl->rcutphiR[ij],r);
-    }
-  }
-  return value;
-}
-
-/* ----------------------------------------------------------------------
-   ion propensity function sigma
-------------------------------------------------------------------------- */
-
-double PairMaise::funcsigma(int i, int j, double r)
-{
-  int ij;
-  double value = 0.0;
-  if (i == j) ij = i;
-  else if (i < j) ij = nelements*(i+1) - (i+1)*(i+2)/2 + j;
-  else ij = nelements*(j+1) - (j+1)*(j+2)/2 + i;
-  if (r < 0.2) r = 0.2;
-  if (r < setfl->rcutq[ij]) {
-    value = setfl->Asigma[ij]*(setfl->negativity[j]-setfl->negativity[i]) *
-      funccutoff(setfl->rq[ij],setfl->rcutq[ij],r);
-  }
-  return value;
-}
-
-/* ----------------------------------------------------------------------
-   charge-charge interaction function sigma
-------------------------------------------------------------------------- */
-
-double PairMaise::funccoul(int i, int j, double r)
-{
-  int ij;
-  double value = 0.0;
-  if (i == j) ij = i;
-  else if (i < j) ij = nelements*(i+1) - (i+1)*(i+2)/2 + j;
-  else ij = nelements*(j+1) - (j+1)*(j+2)/2 + i;
-  if (r < 0.2) r = 0.2;
-  if (r < setfl->rcutsigma[ij]) {
-    value = setfl->Ac[ij]*exp(-setfl->zeta[ij]*r)*
-      funccutoff(setfl->rs[ij],setfl->rcutsigma[ij],r);
-  }
-  return value;
-}
-
-/* ---------------------------------------------------------------------- */
-
-int PairMaise::pack_forward_comm(int n, int *list, double *buf,
-                               int /*pbc_flag*/, int * /*pbc*/)
-{
-  int i,j,m;
-
-  m = 0;
-  if (rhofp == 1) {
-    for (i = 0; i < n; i++) {
-      j = list[i];
-      buf[m++] = rho[j];
-    }
-  }
-  if (rhofp == 2) {
-    for (i = 0; i < n; i++) {
-      j = list[i];
-      buf[m++] = fp[j];
-    }
-  }
-  return m;
-}
-
-/* ---------------------------------------------------------------------- */
-
-void PairMaise::unpack_forward_comm(int n, int first, double *buf)
-{
-  int i,m,last;
-
-  m = 0;
-  last = first + n;
-  if (rhofp == 1) {
-    for (i = first; i < last; i++) rho[i] = buf[m++];
-  }
-  if (rhofp == 2) {
-    for (i = first; i < last; i++) fp[i] = buf[m++];
-  }
-}
-
-/* ---------------------------------------------------------------------- */
-
-int PairMaise::pack_reverse_comm(int n, int first, double *buf)
-{
-  int i,m,last;
-
-  m = 0;
-  last = first + n;
-  if (rhofp == 1) {
-    for (i = first; i < last; i++) buf[m++] = rho[i];
-  }
-  if (rhofp == 2) {
-    for (i = first; i < last; i++) buf[m++] = fp[i];
-  }
-  return m;
-}
-
-/* ---------------------------------------------------------------------- */
-
-void PairMaise::unpack_reverse_comm(int n, int *list, double *buf)
-{
-  int i,j,m;
-
-  m = 0;
-  if (rhofp == 1) {
-    for (i = 0; i < n; i++) {
-      j = list[i];
-      rho[j] += buf[m++];
-    }
-  }
-  if (rhofp == 2) {
-    for (i = 0; i < n; i++) {
-      j = list[i];
-      fp[j] += buf[m++];
-    }
-  }
-}
-
-/* ----------------------------------------------------------------------
-   memory usage of local atom-based arrays
-------------------------------------------------------------------------- */
-
-double PairMaise::memory_usage()
-{
-  double bytes = maxeatom * sizeof(double);
-  bytes += maxvatom*6 * sizeof(double);
-  bytes += 2 * nmax * sizeof(double);
-  return bytes;
-}
-
-EIMPotentialFileReader::EIMPotentialFileReader(LAMMPS *lmp,
-                                               const std::string &filename,
-                                               const int auto_convert) :
-  Pointers(lmp), filename(filename)
-{
-  if (comm->me != 0) {
-    error->one(FLERR, "EIMPotentialFileReader should only be called by proc 0!");
-  }
-
-  int unit_convert = auto_convert;
-  FILE *fp = utils::open_potential(filename, lmp, &unit_convert);
-  conversion_factor = utils::get_conversion_factor(utils::ENERGY,unit_convert);
-
-  if (fp == nullptr) {
-    error->one(FLERR, fmt::format("cannot open eim potential file {}", filename));
-  }
-
-  parse(fp);
-
-  fclose(fp);
-}
-
-std::pair<std::string, std::string> EIMPotentialFileReader::get_pair(const std::string &a, const std::string &b) {
-  if (a < b) {
-    return std::make_pair(a, b);
-  }
-  return std::make_pair(b, a);
-}
-
-char * EIMPotentialFileReader::next_line(FILE * fp) {
-  // concatenate lines if they end with '&'
-  // strip comments after '#'
-  int n = 0;
-  int nwords = 0;
-  bool concat = false;
-
-  char *ptr = fgets(line, MAXLINE, fp);
-
-  if (ptr == nullptr) {
-    // EOF
-    return nullptr;
-  }
-
-  // strip comment
-  if ((ptr = strchr(line, '#'))) *ptr = '\0';
-
-  // strip ampersand
-  if ((ptr = strrchr(line, '&'))) {
-    concat = true;
-    *ptr = '\0';
-  }
-
-  nwords = utils::count_words(line);
-
-  if (nwords > 0) {
-    n = strlen(line);
-  }
-
-  while(n == 0 || concat) {
-    char *ptr = fgets(&line[n], MAXLINE - n, fp);
-
-    if (ptr == nullptr) {
-      // EOF
-      return line;
-    }
-
-    // strip comment
-    if ((ptr = strchr(line, '#'))) *ptr = '\0';
-
-    // strip ampersand
-    if ((ptr = strrchr(line, '&'))) {
-      concat = true;
-      *ptr = '\0';
-    } else {
-      concat = false;
-    }
-
-    nwords += utils::count_words(&line[n]);
-
-    // skip line if blank
-    if (nwords > 0) {
-      n = strlen(line);
-    }
-  }
-
-  return line;
-}
-
-void EIMPotentialFileReader::parse(FILE * fp)
-{
-  char * line = nullptr;
-  bool found_global = false;
-
-  while((line = next_line(fp))) {
-    ValueTokenizer values(line);
-    std::string type = values.next_string();
-
-    if (type == "global:") {
-      if (values.count() != 4) {
-        error->one(FLERR, "Invalid global line in EIM potential file");
-      }
-
-      division = values.next_double();
-      rbig     = values.next_double();
-      rsmall   = values.next_double();
-
-      found_global = true;
-    } else if (type == "element:") {
-      if (values.count() != 9) {
-        error->one(FLERR, "Invalid element line in EIM potential file");
-      }
-
-      std::string name = values.next_string();
-
-      ElementData data;
-      data.ielement   = values.next_int();
-      data.mass       = values.next_double();
-      data.negativity = values.next_double();
-      data.ra         = values.next_double();
-      data.ri         = values.next_double();
-      data.Ec         = values.next_double();
-      data.q0         = values.next_double();
-
-      if (elements.find(name) == elements.end()) {
-        elements[name] = data;
-      } else {
-        error->one(FLERR, "Duplicate pair line in EIM potential file");
-      }
-
-    } else if (type == "pair:") {
-      if (values.count() != 17) {
-        error->one(FLERR, "Invalid element line in EIM potential file");
-      }
-
-      std::string elementA = values.next_string();
-      std::string elementB = values.next_string();
-
-      PairData data;
-      data.rcutphiA  = values.next_double();
-      data.rcutphiR  = values.next_double();
-      data.Eb        = values.next_double() * conversion_factor;
-      data.r0        = values.next_double();
-      data.alpha     = values.next_double();
-      data.beta      = values.next_double();
-      data.rcutq     = values.next_double();
-      data.Asigma    = values.next_double();
-      data.rq        = values.next_double();
-      data.rcutsigma = values.next_double();
-      data.Ac        = values.next_double() * conversion_factor;
-      data.zeta      = values.next_double();
-      data.rs        = values.next_double();
-
-      // should be next_int, but since existing potential files have 1.0000e+00 format
-      // we're doing this instead to keep compatibility
-      data.tp       = (int)values.next_double();
-
-      auto p = get_pair(elementA, elementB);
-
-      if (pairs.find(p) == pairs.end()) {
-        pairs[p] = data;
-      } else {
-        error->one(FLERR, "Duplicate pair line in EIM potential file");
-      }
-    }
-  }
-
-  if (!found_global) {
-    error->one(FLERR, "Missing global line in EIM potential file");
-  }
-}
-
-void EIMPotentialFileReader::get_global(PairMaise::Setfl *setfl) {
-  setfl->division  = division;
-  setfl->rbig      = rbig;
-  setfl->rsmall    = rsmall;
-}
-
-void EIMPotentialFileReader::get_element(PairMaise::Setfl *setfl, int i,
-                                         const std::string &name) {
-  if (elements.find(name) == elements.end())
-    error->one(FLERR,"Element " + name + " not defined in EIM potential file");
-
-  ElementData &data = elements[name];
-  setfl->ielement[i] = data.ielement;
-  setfl->mass[i] = data.mass;
-  setfl->negativity[i] = data.negativity;
-  setfl->ra[i] = data.ra;
-  setfl->ri[i] = data.ri;
-  setfl->Ec[i] = data.Ec;
-  setfl->q0[i] = data.q0;
-}
-
-void EIMPotentialFileReader::get_pair(PairMaise::Setfl *setfl, int ij,
-                                      const std::string &elemA,
-                                      const std::string &elemB) {
-  auto p = get_pair(elemA, elemB);
-
-  if (pairs.find(p) == pairs.end())
-    error->one(FLERR,"Element pair (" + elemA + ", " + elemB
-               + ") is not defined in EIM potential file");
-
-  PairData &data = pairs[p];
-  setfl->rcutphiA[ij] = data.rcutphiA;
-  setfl->rcutphiR[ij] = data.rcutphiR;
-  setfl->Eb[ij] = data.Eb;
-  setfl->r0[ij] = data.r0;
-  setfl->alpha[ij] = data.alpha;
-  setfl->beta[ij] = data.beta;
-  setfl->rcutq[ij] = data.rcutq;
-  setfl->Asigma[ij] = data.Asigma;
-  setfl->rq[ij] = data.rq;
-  setfl->rcutsigma[ij] = data.rcutsigma;
-  setfl->Ac[ij] = data.Ac;
-  setfl->zeta[ij] = data.zeta;
-  setfl->rs[ij] = data.rs;
-  setfl->tp[ij] = data.tp;
-}

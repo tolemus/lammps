@@ -11,6 +11,11 @@
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
 
+/*
+  01-09-21 set to print masses
+  01-09-21 added include <stdio.h>
+*/
+
 #include "atom.h"
 #include "atom_vec.h"
 #include "style_atom.h"  // IWYU pragma: keep
@@ -35,6 +40,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <stdio.h>
 
 #ifdef LMP_USER_INTEL
 #include "neigh_request.h"
@@ -1753,6 +1759,7 @@ void Atom::set_mass(const char *file, int line, int /*narg*/, char **arg)
 
     if (mass[itype] <= 0.0) error->all(file,line,"Invalid mass value");
   }
+  printf("masses: % lf & % lf\n", mass[0], mass[1]);
 }
 
 /* ----------------------------------------------------------------------
