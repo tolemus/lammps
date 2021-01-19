@@ -15,33 +15,6 @@
    Contributing author: Carsten Svaneborg (SDU)
 ------------------------------------------------------------------------- */
 
-/* 8
-   01-09-21
-   coeff does not set masses
-   exterminate coeff :(
-   unexterminate coeff and debug :|
-   remove PairZero::coeff text
-   now using cout to print
-   added <iostream>
-   manually setting masses because I do not fear a deity
-   FINISH 8, MASSES ASSIGNED, ATOMS JUMPING OUT OF BOX
-   9
-   01-09-21
-   set cutoff manually
-   FUNCTIONS
-   10
-   01-09-21
-   try to implement box2lattice
-   11
-   01-15-21
-   fixed position conversion
-   13
-   01-19-21
-   P.EFS = 2
-   implementing ND
-   x fixing cutoff
-     using cutsq instead of cut
-*/
 
 extern "C" {
   #include "mlib.h"
@@ -103,32 +76,34 @@ void PairMaise::compute(int eflag, int vflag)
   
   ev_init(eflag,vflag);
 
+// default settings
+
   double **f = atom->f;
+  int mN = atom->natoms;
+  int NT = atom->ntypes;
   ANN mR;
   PRS mP;
   PRS mW[9];
   LNK mL;
   Cell mC;
   int mCODE;
-  int mN;
   int mNM;
   int mND;
   int mNP;
   int mXT;
-  int mATMN[4];
+  int mATMN[mN];
   double mLAT[3][3];
-  double mPOS[4][3];
+  double mPOS[mN][3];
   double **x;
   double **v;
 
   double mH;
-  double mFRC[4][3];
+  double mFRC[mN][3];
   double mSTR[6];
   double mLATf[3*3];
-  double mPOSf[4*3];
-  double mFRCf[4*3];
+  double mPOSf[mN*3];
+  double mFRCf[mN*3];
   mCODE = 0;
-  mN    = 4;
   mNM   = 500;
   mND   = 0;
   mNP   = 4;
@@ -172,10 +147,13 @@ void PairMaise::compute(int eflag, int vflag)
 	mND = 3;
 	break;
       }
+  mL.B = 0; 
 
-  mATMN[0] = 0; mATMN[1] = 0; mATMN[2] = 0; mATMN[3] = 0;
-  mL.B = 0;
- 
+// set atom types
+  
+  for (i=0;i<mN;i++)
+    mATMN[i] = atom->type[i] - 1;
+
 // flatten 2d arrays into 1d arrays
 
   for(i=0;i<3;i++)
@@ -187,7 +165,9 @@ void PairMaise::compute(int eflag, int vflag)
     }
   
 // call maise
-
+/*  for (i=0;i<NT;i++)
+    mC.spcz[i] = spcz[i];
+*/
   mH = CALL_MAISE(&mR, &mP, mW, &mL, &mC, mCODE, mN, mNM, mND, mNP, mXT, mATMN, mLATf, mPOSf, mFRCf, mSTR);
 
 // set energy
@@ -206,7 +186,7 @@ void PairMaise::compute(int eflag, int vflag)
   if(j<=2)
   for(i=0;i<mN;i++)
     for(q=0;q<3;q++)
-      printf("%d %d force, pos, type % lf % lf % d\n",i,q,f[i][q],mPOSf[3*i+q],atom->type[i]);
+      printf("%d %d forces, pos, type = % lf, % lf, % d\n",i, q, f[i][q], x[i][q], atom->type[i]);
   j++;
 
 }
@@ -267,21 +247,26 @@ void PairMaise::settings(int narg, char **arg)
 }
 
 /* ----------------------------------------------------------------------
+
    set coeffs for one or more type pairs
 ------------------------------------------------------------------------- */
 
 void PairMaise::coeff(int narg, char **arg)
 {
-    int m,n;
     int i,q;
-    if ((narg < 2) || (coeffflag && narg > 4))
+    if ((narg == 0))
     error->all(FLERR,"Incorrect args for pair coefficients");
 
-    if (!allocated) allocate(); 
-  
-    if (strcmp(arg[0], "*") != 0 || strcmp(arg[1], "*") != 0)
-      error->all(FLERR, "Incorrect args for pair coefficients");
+    if (narg != atom->ntypes)
+      error->all(FLERR,"Incorrect args for pair coefficients");
 
+    if (!allocated) allocate(); 
+
+    for (i=0;i<narg;i++)
+      spcz[i] = utils::numeric(FLERR,arg[i],false,lmp);
+
+
+/*
 // set bounds
 
     int ilo,ihi,qlo,qhi;
@@ -297,7 +282,7 @@ void PairMaise::coeff(int narg, char **arg)
       setflag[i][q] = 1;
       count++;
     }
-   
+*/   
 }
 /* ----------------------------------------------------------------------
    init for one type pair i,j and corresponding j,i

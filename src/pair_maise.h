@@ -63,6 +63,8 @@ class PairMaise : public Pair {
   double *mass;
   double **mcut;
 
+  int spcz[10];
+
   int j;
   
   int *map;
