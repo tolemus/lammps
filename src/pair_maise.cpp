@@ -186,6 +186,8 @@ void PairMaise::compute(int eflag, int vflag)
 	mPOSf[3*i+q] = x[i][q]; 
     }
   
+// call maise
+
   mH = CALL_MAISE(&mR, &mP, mW, &mL, &mC, mCODE, mN, mNM, mND, mNP, mXT, mATMN, mLATf, mPOSf, mFRCf, mSTR);
 
 // set energy
@@ -204,7 +206,7 @@ void PairMaise::compute(int eflag, int vflag)
   if(j<=2)
   for(i=0;i<mN;i++)
     for(q=0;q<3;q++)
-      printf("%d %d force: % lf % lf % lf\n",i,q,f[i][q],mPOSf[3*i+q],mC.E);
+      printf("%d %d force, pos, type % lf % lf % d\n",i,q,f[i][q],mPOSf[3*i+q],atom->type[i]);
   j++;
 
 }
@@ -257,8 +259,9 @@ void PairMaise::settings(int narg, char **arg)
   // reset cutoffs that have been explicitly set
   if (allocated) {
     for (i = 1; i <= atom->ntypes; i++)
-      for (q = i+1; q <= atom->ntypes; q++){
-        cut[i][j] = cut_global;
+      for (q = 1; q <= atom->ntypes; q++){
+        cut[i][q] = cut_global;
+	setflag[i][q] = 1;
       }
   }
 }
@@ -270,77 +273,31 @@ void PairMaise::settings(int narg, char **arg)
 void PairMaise::coeff(int narg, char **arg)
 {
     int m,n;
+    int i,q;
     if ((narg < 2) || (coeffflag && narg > 4))
     error->all(FLERR,"Incorrect args for pair coefficients");
 
-  if (!allocated) allocate();
+    if (!allocated) allocate(); 
   
-  if (strcmp(arg[0], "*") != 0 || strcmp(arg[1], "*") != 0)
-    error->all(FLERR, "Incorrect args for pair coefficients");
+    if (strcmp(arg[0], "*") != 0 || strcmp(arg[1], "*") != 0)
+      error->all(FLERR, "Incorrect args for pair coefficients");
 
-  if (nelements) {
-    for (int i=0; i < nelements; i++) delete [] elements[i];
-    delete [] elements;
-    delete [] mass;
-  }
+// set bounds
 
-  nelements = 2;
-  
-  elements = new char*[nelements];
-  mass = new double[nelements];
+    int ilo,ihi,qlo,qhi;
+    utils::bounds(FLERR,arg[0],1,atom->ntypes,ilo,ihi,error);
+    utils::bounds(FLERR,arg[1],1,atom->ntypes,ilo,ihi,error);
+    double cut_one = cut_global;
 
-  for (int i = 0; i < nelements; i++) {
-    n = strlen(arg[i+2]) + 1;
-    elements[i] = new char[n];
-    strcpy(elements[i], arg[i+2]);
-  }
-
-  for (int i = 4 + nelements; i < narg; i++){
-    m = i - (4+nelements) + 1;
-    int j;
-    for (j = 0; j < nelements; j++)
-      if (strcmp(arg[i],elements[j]) == 0) break;
-    if (j < nelements) map[m] = j;
-    else if (strcmp(arg[i],"NULL") == 0) map[m] = -1;
-    else error->all(FLERR,"Incorrect args for pair coefficients");
-  }
-
-  n = atom->ntypes;
-  for (int i = 1; i <= n; i++)
-    for (int j = i; j <= n; j++)
-      setflag[i][j] = 0;
-
-    for (int i = 0; i < nelements; i++)
-    if (mass[i] != 0)
-      std::cout << "MASS: " << i << " " << mass[i] << "\n" << std::endl;
 // required for setting flags setflag
   int count = 0;
-   for (int i = 1; i <= n; i++) {
-    for (int j = i; j <= n; j++) {
-      if (map[i] >= 0 && map[j] >= 0) {
-        setflag[i][j] = 1;
-	  count++;
-      }
-       scale[i][j] = 1.0;
+  for (i=ilo;i<=ihi;i++)
+    for (q=MAX(qlo,i);q<=qhi;q++){
+      cut[i][q] = cut_one;
+      setflag[i][q] = 1;
+      count++;
     }
    
-// manualy setting cutoff
-   int ilo,ihi,jlo,jhi;
-   utils::bounds(FLERR,arg[0],1,atom->ntypes,ilo,ihi,error);
-   utils::bounds(FLERR,arg[1],1,atom->ntypes,jlo,jhi,error);
-
-   double cut_one = cut_global;
-   if (coeffflag && (narg == 3)) cut_one = utils::numeric(FLERR,arg[2],false,lmp);
-   cut[1][2] = 20;
-   }
-
-// set cutoff from mcut
-/*   int i, j;
-   for (i = 0; i < atom->ntypes; i++)
-     for (j = i; j < atom->ntypes; j++)
-       cut[i][j] = mcut[i][j];
-   printf("COEFF\n");
-*/
 }
 /* ----------------------------------------------------------------------
    init for one type pair i,j and corresponding j,i
