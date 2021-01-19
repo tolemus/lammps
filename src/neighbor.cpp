@@ -47,7 +47,6 @@
 
 #include <cmath>
 #include <cstring>
-#include <stdio.h>
 
 using namespace LAMMPS_NS;
 using namespace NeighConst;
@@ -172,7 +171,6 @@ pairclass(nullptr), pairnames(nullptr), pairmasks(nullptr)
   // Kokkos setting
 
   copymode = 0;
-  printf("NEIGHBOR CONSTRUCTOR END\n");
 }
 
 /* ---------------------------------------------------------------------- */
@@ -316,7 +314,6 @@ void Neighbor::init()
       } else cutneighghostsq[i][j] = cut*cut;
     }
   }
-  cutneighmax = 5.0;
   cutneighmaxsq = cutneighmax * cutneighmax;
 
   // rRESPA cutoffs
@@ -723,11 +720,11 @@ int Neighbor::init_pair()
     lists[i]->index = i;
     lists[i]->requestor = requests[i]->requestor;
 
-    if (requests[i]->pair) {
+    if(requests[i]->pair) {
         lists[i]->requestor_type = NeighList::PAIR;
-    } else if (requests[i]->fix) {
+    } else if(requests[i]->fix) {
         lists[i]->requestor_type = NeighList::FIX;
-    } else if (requests[i]->compute) {
+    } else if(requests[i]->compute) {
         lists[i]->requestor_type = NeighList::COMPUTE;
     }
 

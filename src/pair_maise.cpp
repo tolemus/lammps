@@ -32,6 +32,15 @@
    10
    01-09-21
    try to implement box2lattice
+   11
+   01-15-21
+   fixed position conversion
+   13
+   01-19-21
+   P.EFS = 2
+   implementing ND
+   x fixing cutoff
+     using cutsq instead of cut
 */
 
 extern "C" {
@@ -127,12 +136,13 @@ void PairMaise::compute(int eflag, int vflag)
   mC.p  = 0;
   x = atom->x;
   v = atom->v;
+  mP.EFS = 1;
 
   double mx;
   double my;
   double mz;
 
-
+// set maise lattice
   for(i=0;i<3;i++){
     if (i==0){
       mx = domain->boxhi[0] - domain->boxlo[0];
@@ -155,31 +165,42 @@ void PairMaise::compute(int eflag, int vflag)
     mLAT[i][2] = mz;
   }  
 
-  double ke;
-  mPOS[ 1][ 0] = -2.0;
-  mPOS[ 3][ 1] = -2.0;
+// set ND based on boundary properties
+  for (i = 0; i < 3; i++)
+    for (q = 0; q < 2; q++)
+      if (domain->boundary[i][q] == 0){
+	mND = 3;
+	break;
+      }
 
   mATMN[0] = 0; mATMN[1] = 0; mATMN[2] = 0; mATMN[3] = 0;
   mL.B = 0;
+ 
+// flatten 2d arrays into 1d arrays
+
   for(i=0;i<3;i++)
     for(q=0;q<3;q++)
       mLATf[3*i+q] = mLAT[i][q];
   for(i=0;i<mN;i++)
     for(q=0;q<3;q++){
-      if(x[i][q] >= 10)
-	mPOSf[3*i+q] = x[i][q] - 20;
-      else
 	mPOSf[3*i+q] = x[i][q]; 
     }
+  
   mH = CALL_MAISE(&mR, &mP, mW, &mL, &mC, mCODE, mN, mNM, mND, mNP, mXT, mATMN, mLATf, mPOSf, mFRCf, mSTR);
-  for (int i = 0; i < mN; i++){
-    ke +=0.5* mass[0]*(v[i][0]*v[i][0] + v[i][1]*v[i][1] + v[i][2]*v[i][2]);
-  }
-  eng_coul = ke-mC.E;
+
+// set energy
+
+  eng_coul = mC.E;
   if (vflag_fdotr) virial_fdotr_compute();
+
+// set lammps forces
+
   for(i=0;i<mN;i++)
     for(q=0;q<3;q++)
       f[i][q] = mFRCf[3*i+q];
+
+// print lammps forces three times
+
   if(j<=2)
   for(i=0;i<mN;i++)
     for(q=0;q<3;q++)
@@ -221,22 +242,24 @@ void PairMaise::allocate()
 
 void PairMaise::settings(int narg, char **arg)
 {
-  if ((narg != 1) && (narg != 2))
+  int i,q;  
+
+  if (!allocated) allocate();
+
+  if (narg != 1)
     error->all(FLERR,"Illegal pair_style command");
 
   cut_global = utils::numeric(FLERR,arg[0],false,lmp);
-  if (narg == 2) {
-    if (strcmp("nocoeff",arg[1]) == 0) coeffflag=0;
-    else error->all(FLERR,"Illegal pair_style command");
-  }
+
+  printf("CUT GLOBAL IS %lf\n", cut_global);
+
 
   // reset cutoffs that have been explicitly set
-
   if (allocated) {
-    int i,j;
     for (i = 1; i <= atom->ntypes; i++)
-      for (j = i+1; j <= atom->ntypes; j++)
+      for (q = i+1; q <= atom->ntypes; q++){
         cut[i][j] = cut_global;
+      }
   }
 }
 
@@ -287,35 +310,37 @@ void PairMaise::coeff(int narg, char **arg)
     for (int j = i; j <= n; j++)
       setflag[i][j] = 0;
 
-  mass[0] = 63.546;
-
     for (int i = 0; i < nelements; i++)
     if (mass[i] != 0)
       std::cout << "MASS: " << i << " " << mass[i] << "\n" << std::endl;
-
+// required for setting flags setflag
   int count = 0;
    for (int i = 1; i <= n; i++) {
     for (int j = i; j <= n; j++) {
       if (map[i] >= 0 && map[j] >= 0) {
         setflag[i][j] = 1;
-        if (i == j){
-	  atom->set_mass(FLERR,i,mass[map[i]]);
-        }
 	  count++;
       }
-      scale[i][j] = 1.0;
+       scale[i][j] = 1.0;
     }
-
-   }
+   
+// manualy setting cutoff
    int ilo,ihi,jlo,jhi;
    utils::bounds(FLERR,arg[0],1,atom->ntypes,ilo,ihi,error);
    utils::bounds(FLERR,arg[1],1,atom->ntypes,jlo,jhi,error);
 
    double cut_one = cut_global;
    if (coeffflag && (narg == 3)) cut_one = utils::numeric(FLERR,arg[2],false,lmp);
-   cut[0][0] = 20;
-   cut[0][1] = 20;
-   cut[1][1] = 20;
+   cut[1][2] = 20;
+   }
+
+// set cutoff from mcut
+/*   int i, j;
+   for (i = 0; i < atom->ntypes; i++)
+     for (j = i; j < atom->ntypes; j++)
+       cut[i][j] = mcut[i][j];
+   printf("COEFF\n");
+*/
 }
 /* ----------------------------------------------------------------------
    init for one type pair i,j and corresponding j,i

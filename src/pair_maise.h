@@ -61,6 +61,7 @@ class PairMaise : public Pair {
   double cutmax;
   char **elements;
   double *mass;
+  double **mcut;
 
   int j;
   
