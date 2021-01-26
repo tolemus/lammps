@@ -1,0 +1,3 @@
+
+maise_INC=-I../MAISE/inc -I../MAISE/lib/include
+maise_LIB=-lmaise -lgomp -L../MAISE/lib
