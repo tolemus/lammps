@@ -182,13 +182,13 @@ void PairMaise::compute(int eflag, int vflag)
       f[i][q] = mFRCf[3*i+q];
 
 // print lammps forces three times
-
+/*
   if(j<=2)
   for(i=0;i<mN;i++)
     for(q=0;q<3;q++)
       printf("%d %d forces, pos, type = % lf, % lf, % d\n",i, q, f[i][q], x[i][q], atom->type[i]);
   j++;
-
+*/
 }
 
 /* ---------------------------------------------------------------------- */
