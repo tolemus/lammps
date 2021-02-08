@@ -426,9 +426,9 @@ void PairMaise::LOUTCAR(Cell *mC)
 //      NLin++;
 //    while(std::getline(Lifs, l))
 //      LNLin++;
-    sprintf(s,"head -n %d OUTCAR | tail -n 4 >> temp", mC->N+23);
+    sprintf(s,"head -n %d OUTCAR | tail -n %d >> temp", mC->N+23, N);
     system(s);
-    sprintf(s,"head -n %d LOUTCAR | tail -n 4 >> ltemp",mC->N+9);
+    sprintf(s,"head -n %d LOUTCAR | tail -n %d >> ltemp",mC->N+9, N);
     system(s);
     system("diff temp ltemp >> comp");
     std::ifstream Fifs("comp");
@@ -442,7 +442,7 @@ void PairMaise::LOUTCAR(Cell *mC)
     }
   } else {
    
-    error->all(FLERR,"ERROR: NO OUTCAR PLEASE CHANGE FLAG OR INSERT OUTCAR\n");
+    error->all(FLERR,"NO OUTCAR PLEASE CHANGE FLAG OR INSERT OUTCAR\n");
  
   }
 }
