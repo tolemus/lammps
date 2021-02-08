@@ -32,6 +32,10 @@ PairStyle(maise,PairMaise)
 
 #include "pair.h"
 
+extern "C" {
+  #include "mlib.h"
+}
+
 namespace LAMMPS_NS {
 
 class PairMaise : public Pair {
@@ -71,6 +75,7 @@ class PairMaise : public Pair {
   double **scale;
 
   virtual void allocate();
+  void LOUTCAR(Cell*);
 };
 
 }

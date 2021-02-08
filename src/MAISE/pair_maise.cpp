@@ -36,6 +36,7 @@ extern "C" {
 
 #include <cstring>
 #include <iostream>
+#include <fstream>
 
 using namespace LAMMPS_NS;
 
@@ -181,6 +182,10 @@ void PairMaise::compute(int eflag, int vflag)
     for(q=0;q<3;q++)
       f[i][q] = mFRCf[3*i+q];
 
+  if(j<1){
+    LOUTCAR(&mC);
+    j++;
+  }
 // print lammps forces three times
 /*
   if(j<=2)
@@ -395,3 +400,49 @@ double PairMaise::single(int /*i*/, int /*j*/, int /* itype */, int /* jtype */,
   return 0.0;
 }
 
+void PairMaise::LOUTCAR(Cell *mC)
+{
+
+  FILE *file;
+  std::string l;
+  int NLin = 0;
+  int LNLin = 0;
+  char s[200];
+
+  printf("Hello LOUTCAR is working\n");
+
+  if (file = fopen("OUTCAR", "r")) {
+    system("cp OUTCAR OUTCAR.0");
+    system("rm OUTCAR");
+    CELL_OUT(mC);
+    system("cp OUTCAR LOUTCAR");
+    system("rm OUTCAR");
+    system("cp OUTCAR.0 OUTCAR");
+    system("rm OUTCAR.0");
+    
+    std::ifstream ifs("OUTCAR");
+    std::ifstream Lifs("LOUTCAR");
+//    while(std::getline(ifs, l))
+//      NLin++;
+//    while(std::getline(Lifs, l))
+//      LNLin++;
+    sprintf(s,"head -n %d OUTCAR | tail -n 4 >> temp", mC->N+23);
+    system(s);
+    sprintf(s,"head -n %d LOUTCAR | tail -n 4 >> ltemp",mC->N+9);
+    system(s);
+    system("diff temp ltemp >> comp");
+    std::ifstream Fifs("comp");
+    while(std::getline(Fifs, l))
+      NLin++;
+    system("rm temp ltemp");
+    if (NLin==0){
+
+      printf("FORCES MATCH\n");
+
+    }
+  } else {
+   
+    error->all(FLERR,"ERROR: NO OUTCAR PLEASE CHANGE FLAG OR INSERT OUTCAR\n");
+ 
+  }
+}
