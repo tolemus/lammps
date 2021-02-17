@@ -70,7 +70,8 @@ class PairMaise : public Pair {
   int spcz[10];
 
   int j;
-  
+  int loflag;
+
   int *map;
   double **scale;
 

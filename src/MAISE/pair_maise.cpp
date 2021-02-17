@@ -50,6 +50,7 @@ PairMaise::PairMaise(LAMMPS *lmp) : Pair(lmp) {
   scale = nullptr;
 
   j = 0;
+  loflag = 0;
   
   comm_forward = 38;
   comm_reverse = 30;
@@ -182,10 +183,11 @@ void PairMaise::compute(int eflag, int vflag)
     for(q=0;q<3;q++)
       f[i][q] = mFRCf[3*i+q];
 
-  if(j<1){
+  if(j<1 && loflag==1){
     LOUTCAR(&mC);
     j++;
   }
+
 // print lammps forces three times
 /*
   if(j<=2)
@@ -233,13 +235,15 @@ void PairMaise::settings(int narg, char **arg)
 
   if (!allocated) allocate();
 
-  if (narg != 1)
+  if (narg > 2)
     error->all(FLERR,"Illegal pair_style command");
 
   cut_global = utils::numeric(FLERR,arg[0],false,lmp);
+  
+  loflag = utils::inumeric(FLERR,arg[1],false,lmp);
 
-  printf("CUT GLOBAL IS %lf\n", cut_global);
-
+  if (loflag != 1 && loflag != 0)
+    error->all(FLERR,"Illegal pair_style command");
 
   // reset cutoffs that have been explicitly set
   if (allocated) {
@@ -258,7 +262,7 @@ void PairMaise::settings(int narg, char **arg)
 
 void PairMaise::coeff(int narg, char **arg)
 {
-    int i,q;
+/*    int i,q;
     if ((narg == 0))
     error->all(FLERR,"Incorrect args for pair coefficients");
 
@@ -271,7 +275,7 @@ void PairMaise::coeff(int narg, char **arg)
       spcz[i] = utils::numeric(FLERR,arg[i],false,lmp);
 
 
-/*
+
 // set bounds
 
     int ilo,ihi,qlo,qhi;
@@ -426,9 +430,9 @@ void PairMaise::LOUTCAR(Cell *mC)
 //      NLin++;
 //    while(std::getline(Lifs, l))
 //      LNLin++;
-    sprintf(s,"head -n %d OUTCAR | tail -n %d >> temp", mC->N+23, N);
+    sprintf(s,"head -n %d OUTCAR | tail -n %d >> temp", mC->N+23, mC->N);
     system(s);
-    sprintf(s,"head -n %d LOUTCAR | tail -n %d >> ltemp",mC->N+9, N);
+    sprintf(s,"head -n %d LOUTCAR | tail -n %d >> ltemp",mC->N+9, mC->N);
     system(s);
     system("diff temp ltemp >> comp");
     std::ifstream Fifs("comp");
